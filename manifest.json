@@ -1,0 +1,38 @@
+{
+    "manifest_version": 3,
+    "name": "卡卡颂助手 - Carcassonne Helper",
+    "version": "1.0.0",
+    "description": "BGA卡卡颂地块计数器 - 实时显示各类型地块剩余数量",
+    "permissions": [
+        "activeTab"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.boardgamearena.com/*"
+            ],
+            "js": [
+                "src/content.js"
+            ],
+            "css": [
+                "src/panel.css"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "*://*.boardgamearena.com/*"
+            ],
+            "js": [
+                "src/inject.js"
+            ],
+            "run_at": "document_idle",
+            "world": "MAIN"
+        }
+    ],
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    }
+}

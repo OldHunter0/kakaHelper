@@ -1,0 +1,291 @@
+/* ═══════════════════════════════════════════
+   卡卡颂助手 - 浮动面板样式
+   ═══════════════════════════════════════════ */
+
+#carca-helper-panel {
+  position: fixed;
+  top: 80px;
+  right: 10px;
+  width: 340px;
+  max-height: 85vh;
+  background: linear-gradient(135deg, rgba(20, 22, 35, 0.95), rgba(30, 34, 52, 0.95));
+  border: 1px solid rgba(120, 140, 200, 0.3);
+  border-radius: 12px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  z-index: 99999;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  color: #e0e4f0;
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+#carca-helper-panel:hover {
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(120, 140, 200, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ── 头部 ── */
+.carca-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(60, 80, 160, 0.3), rgba(80, 60, 140, 0.2));
+  border-bottom: 1px solid rgba(120, 140, 200, 0.15);
+  cursor: move;
+  user-select: none;
+}
+
+.carca-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #8ec5fc, #e0c3fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.carca-deck-info {
+  margin-left: auto;
+  margin-right: 10px;
+  font-size: 12px;
+  color: #9ca3c0;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.carca-toggle {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(120, 140, 200, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9ca3c0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.carca-toggle:hover {
+  background: rgba(120, 140, 200, 0.2);
+  color: #e0e4f0;
+  border-color: rgba(120, 140, 200, 0.5);
+}
+
+/* ── 内容区域 ── */
+.carca-body {
+  max-height: calc(85vh - 50px);
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 140, 200, 0.3) transparent;
+}
+
+.carca-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.carca-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.carca-body::-webkit-scrollbar-thumb {
+  background: rgba(120, 140, 200, 0.3);
+  border-radius: 3px;
+}
+
+/* ── 过滤器 ── */
+.carca-filter {
+  display: flex;
+  gap: 4px;
+  padding: 4px 4px 8px;
+  flex-wrap: wrap;
+}
+
+.carca-filter-btn {
+  padding: 3px 10px;
+  border: 1px solid rgba(120, 140, 200, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #8890b0;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.carca-filter-btn:hover {
+  background: rgba(120, 140, 200, 0.15);
+  color: #c0c8e8;
+  border-color: rgba(120, 140, 200, 0.4);
+}
+
+.carca-filter-btn.active {
+  background: linear-gradient(135deg, rgba(80, 100, 200, 0.3), rgba(120, 80, 200, 0.2));
+  color: #d0d8f8;
+  border-color: rgba(120, 140, 200, 0.5);
+  font-weight: 600;
+}
+
+/* ── 分区标题 ── */
+.carca-section {
+  margin-bottom: 6px;
+}
+
+.carca-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #7880a0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 6px 2px;
+  border-bottom: 1px solid rgba(120, 140, 200, 0.1);
+  margin-bottom: 6px;
+}
+
+/* ── 地块网格 ── */
+.carca-tiles-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px;
+}
+
+/* ── 地块卡片 ── */
+.carca-tile-card {
+  width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(120, 140, 200, 0.1);
+  transition: all 0.2s ease;
+  cursor: default;
+  position: relative;
+}
+
+.carca-tile-card:hover {
+  background: rgba(120, 140, 200, 0.12);
+  border-color: rgba(120, 140, 200, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.carca-tile-card.depleted {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+.carca-tile-card.depleted::after {
+  content: '✕';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  color: rgba(255, 80, 80, 0.5);
+  font-weight: 900;
+  pointer-events: none;
+}
+
+/* ── 地块缩略图 ── */
+.carca-tile-thumb {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.carca-tile-thumb .tile_art {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ── 边类型标签 ── */
+.carca-edge-label {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.65);
+  padding: 0 3px;
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* ── 计数 ── */
+.carca-tile-count {
+  margin-top: 3px;
+  text-align: center;
+  line-height: 1;
+}
+
+.carca-remaining {
+  font-size: 16px;
+  font-weight: 800;
+  color: #8ec5fc;
+}
+
+.carca-tile-card.depleted .carca-remaining {
+  color: #ff6b6b;
+}
+
+.carca-total {
+  font-size: 11px;
+  color: #5a6080;
+  font-weight: 400;
+}
+
+/* ── 动画 ── */
+@keyframes carca-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#carca-helper-panel {
+  animation: carca-fade-in 0.3s ease-out;
+}
+
+/* ── 响应式 ── */
+@media (max-width: 1200px) {
+  #carca-helper-panel {
+    width: 280px;
+  }
+  .carca-tile-card {
+    width: 52px;
+  }
+  .carca-tile-thumb {
+    width: 42px;
+    height: 42px;
+  }
+}
