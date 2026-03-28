@@ -214,11 +214,50 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.carca-tile-thumb .tile_art {
+.carca-tile-thumb-art {
   display: block;
   position: absolute;
   top: 0;
   left: 0;
+}
+
+/* ── 文字方位可视化（无sprite时显示） ── */
+.carca-tile-text-desc {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carca-edge-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.carca-edge-visual .ev-n,
+.carca-edge-visual .ev-s {
+  text-align: center;
+}
+
+.carca-edge-visual .ev-middle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 3px;
+}
+
+.carca-edge-visual .ev-center {
+  font-size: 10px;
+  color: #aab0cc;
 }
 
 /* ── 边类型标签 ── */
@@ -227,19 +266,33 @@
   bottom: 1px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(0, 0, 0, 0.65);
-  padding: 0 3px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 1px 4px;
   border-radius: 2px;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   font-family: 'Consolas', 'Monaco', monospace;
+  z-index: 2;
+}
+
+/* ── 简短描述 ── */
+.carca-tile-desc {
+  font-size: 9px;
+  color: #8890b0;
+  text-align: center;
+  line-height: 1.2;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60px;
 }
 
 /* ── 计数 ── */
 .carca-tile-count {
-  margin-top: 3px;
+  margin-top: 2px;
   text-align: center;
   line-height: 1;
 }

@@ -9,101 +9,113 @@
 
   /**
    * 从 DOM 中扫描已放置的地块ID（备用数据源）
-   * BGA 卡卡颂每个已放置地块的 DOM 元素有 id 类似 "tile_XX" 或 data 属性
    */
   function scanPlayedTilesFromDOM() {
     const playedIds = [];
-
-    // 方法1: 查找 board 上的地块元素
-    const tileElements = document.querySelectorAll('#board .bdtile, #board .tile, [id^="tile_"]');
+    // 查找 board 上的各种地块元素
+    const selectors = [
+      '#board .bdtile',
+      '#board .tile',
+      '[id^="tile_"]',
+      '[id^="placedtile_"]',
+      '.tileContainer',
+    ];
+    const tileElements = document.querySelectorAll(selectors.join(','));
     tileElements.forEach(el => {
-      // 尝试从 id 属性提取地块编号
-      const match = el.id && el.id.match(/tile[_-]?(\d+)/i);
+      const match = el.id && el.id.match(/(?:tile|placedtile)[_-]?(\d+)/i);
       if (match) {
         playedIds.push(parseInt(match[1], 10));
       }
-      // 尝试从 data 属性提取
       if (el.dataset && el.dataset.tileId) {
         playedIds.push(parseInt(el.dataset.tileId, 10));
       }
     });
-
     return playedIds;
   }
 
   /**
-   * 提取 .tile_art 的 sprite sheet 背景图 URL
+   * 提取 .tile_art 元素的实际 CSS 样式
    */
-  function extractSpriteSheetUrl() {
-    // 尝试从已有的 tile_art 元素获取背景图
-    const tileArt = document.querySelector('.tile_art');
+  function extractTileArtStyles() {
+    const info = {
+      backgroundImage: null,
+      backgroundSize: null,
+      firstEdBackgroundImage: null,
+      firstEdBackgroundSize: null,
+    };
+
+    // 常规 tile_art
+    const tileArt = document.querySelector('.tile_art:not(.first_edition)');
     if (tileArt) {
       const style = window.getComputedStyle(tileArt);
-      const bgImage = style.backgroundImage;
-      if (bgImage && bgImage !== 'none') {
-        return bgImage; // 返回完整的 url(...) 值
+      if (style.backgroundImage && style.backgroundImage !== 'none') {
+        info.backgroundImage = style.backgroundImage;
+        info.backgroundSize = style.backgroundSize;
       }
     }
 
-    // 尝试从 first_edition 版本获取
-    const firstEdTileArt = document.querySelector('.tile_art.first_edition');
-    if (firstEdTileArt) {
-      const style = window.getComputedStyle(firstEdTileArt);
-      const bgImage = style.backgroundImage;
-      if (bgImage && bgImage !== 'none') {
-        return bgImage;
+    // first_edition tile_art
+    const firstEdArt = document.querySelector('.tile_art.first_edition');
+    if (firstEdArt) {
+      const style = window.getComputedStyle(firstEdArt);
+      if (style.backgroundImage && style.backgroundImage !== 'none') {
+        info.firstEdBackgroundImage = style.backgroundImage;
+        info.firstEdBackgroundSize = style.backgroundSize;
       }
     }
 
-    // 尝试从样式表中查找
-    for (const sheet of document.styleSheets) {
-      try {
-        for (const rule of sheet.cssRules || []) {
-          if (rule.selectorText && rule.selectorText.includes('.tile_art')) {
-            const bg = rule.style.backgroundImage;
-            if (bg && bg !== 'none') {
-              return bg;
+    // 如果从元素取不到，尝试从样式表中查找
+    if (!info.backgroundImage) {
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules || []) {
+            if (!rule.selectorText) continue;
+            if (rule.selectorText.includes('.tile_art') &&
+              !rule.selectorText.includes('first_edition')) {
+              const bg = rule.style.backgroundImage;
+              const sz = rule.style.backgroundSize;
+              if (bg && bg !== 'none') {
+                info.backgroundImage = bg;
+                if (sz) info.backgroundSize = sz;
+              }
+            }
+            if (rule.selectorText.includes('first_edition')) {
+              const bg = rule.style.backgroundImage;
+              const sz = rule.style.backgroundSize;
+              if (bg && bg !== 'none') {
+                info.firstEdBackgroundImage = bg;
+                if (sz) info.firstEdBackgroundSize = sz;
+              }
             }
           }
-        }
-      } catch (e) {
-        // 跨域样式表无法访问，忽略
+        } catch (e) { /* 跨域 */ }
       }
     }
 
-    return null;
+    return info;
   }
 
   /**
-   * 提取 first_edition 的 sprite sheet 背景图 URL
+   * 从页面上已有的 .tile_art 元素提取已知的 background-position 映射
+   * 这能帮助我们确认 sprite sheet 的排列方式
    */
-  function extractFirstEditionSpriteUrl() {
-    const firstEdTileArt = document.querySelector('.tile_art.first_edition');
-    if (firstEdTileArt) {
-      const style = window.getComputedStyle(firstEdTileArt);
-      const bgImage = style.backgroundImage;
-      if (bgImage && bgImage !== 'none') {
-        return bgImage;
-      }
-    }
+  function extractKnownSpritePositions() {
+    const positions = {};
+    // 查找页面上所有 tile_art，尝试将它们与 tile id 关联
+    document.querySelectorAll('.tile_art').forEach(el => {
+      const style = window.getComputedStyle(el);
+      const bgPos = style.backgroundPosition;
 
-    // 尝试从样式表中查找
-    for (const sheet of document.styleSheets) {
-      try {
-        for (const rule of sheet.cssRules || []) {
-          if (rule.selectorText && rule.selectorText.includes('.tile_art') && rule.selectorText.includes('first_edition')) {
-            const bg = rule.style.backgroundImage;
-            if (bg && bg !== 'none') {
-              return bg;
-            }
-          }
+      // 尝试找到关联的 tile id
+      const parent = el.closest('[id]');
+      if (parent && parent.id) {
+        const match = parent.id.match(/(\d+)/);
+        if (match) {
+          positions[match[1]] = bgPos;
         }
-      } catch (e) {
-        // 跨域样式表无法访问，忽略
       }
-    }
-
-    return null;
+    });
+    return positions;
   }
 
   /**
@@ -119,12 +131,44 @@
     // 判断当前启用了哪些扩展包
     const expansions = {
       base: true,
-      exp1: !!gd.exp1, // Inns & Cathedrals
-      exp2: !!gd.exp2, // Traders & Builders
-      exp3: !!gd.exp3, // Princess & Dragon
+      exp1: !!gd.exp1,
+      exp2: !!gd.exp2,
+      exp3: !!gd.exp3,
     };
 
-    // 收集已放置的地块ID列表（从 gamedatas）
+    // 确定活动的扩展包ID集合
+    const activeExpansionIds = new Set([0]); // 基础版始终包含
+    if (gd.exp1) activeExpansionIds.add(1);
+    if (gd.exp2) activeExpansionIds.add(2);
+    if (gd.exp3) activeExpansionIds.add(3);
+    activeExpansionIds.add(9); // 河流数据包含但在显示时排除
+
+    // 过滤 tile_data：只保留当前游戏活动扩展包的地块
+    const filteredTileData = {};
+    let maxImgIndex = 0;
+    let maxFirstEdImgIndex = 0;
+
+    if (gd.tile_data) {
+      for (const tileId in gd.tile_data) {
+        if (gd.tile_data.hasOwnProperty(tileId)) {
+          const td = gd.tile_data[tileId];
+          const exp = parseInt(td.expansion, 10);
+          if (activeExpansionIds.has(exp)) {
+            filteredTileData[tileId] = td;
+
+            const img = parseInt(td.image, 10);
+            if (!isNaN(img) && img > maxImgIndex) maxImgIndex = img;
+
+            if (td.image_firstedition !== undefined && td.image_firstedition !== null) {
+              const imgFe = parseInt(td.image_firstedition, 10);
+              if (!isNaN(imgFe) && imgFe > maxFirstEdImgIndex) maxFirstEdImgIndex = imgFe;
+            }
+          }
+        }
+      }
+    }
+
+    // 收集已放置的地块ID
     const playedTileIds = [];
     if (gd.tiles) {
       for (const key in gd.tiles) {
@@ -136,8 +180,6 @@
 
     // 备用：从 DOM 扫描已放置的地块
     const domPlayedIds = scanPlayedTilesFromDOM();
-
-    // 合并两个来源，取并集（去重）
     const allPlayedIds = [...new Set([...playedTileIds, ...domPlayedIds])];
 
     // 收集手牌中的地块
@@ -151,24 +193,31 @@
       }
     }
 
-    // 提取 sprite sheet URL
-    const spriteUrl = extractSpriteSheetUrl();
-    const firstEdSpriteUrl = extractFirstEditionSpriteUrl();
-
-    // 检测页面是否使用 first_edition
+    // 提取 sprite sheet 样式信息
+    const tileArtInfo = extractTileArtStyles();
     const isFirstEdition = !!document.querySelector('.tile_art.first_edition');
 
+    // 计算 sprite sheet 的行列数
+    const spriteCols = 12;
+    const spriteRows = Math.ceil((maxImgIndex + 1) / spriteCols);
+    const firstEdSpriteRows = Math.ceil((maxFirstEdImgIndex + 1) / spriteCols);
+
+    // 提取已知位置映射（调试用，也帮助验证）
+    const knownPositions = extractKnownSpritePositions();
+
     return {
-      tileData: gd.tile_data,         // 所有地块ID -> {type, image, image_firstedition, expansion}
-      tileTypes: gd.tile_types,       // 地块类型结构定义
-      playedTileIds: allPlayedIds,    // 已放置的地块ID（合并 gamedatas + DOM）
-      handTileIds: handTileIds,       // 手牌地块ID
+      tileData: filteredTileData,
+      tileTypes: gd.tile_types,
+      playedTileIds: allPlayedIds,
+      handTileIds: handTileIds,
       deckSize: parseInt(gd.deck_size, 10) || 0,
       expansions: expansions,
-      places: gd.places,              // 可放置位置
-      spriteUrl: spriteUrl,           // sprite sheet 背景图 URL
-      firstEdSpriteUrl: firstEdSpriteUrl, // first_edition 版 sprite sheet URL
-      isFirstEdition: isFirstEdition, // 是否使用 first_edition 版本
+      tileArtInfo: tileArtInfo,
+      isFirstEdition: isFirstEdition,
+      spriteCols: spriteCols,
+      spriteRows: spriteRows,
+      firstEdSpriteRows: firstEdSpriteRows,
+      knownPositions: knownPositions,
     };
   }
 
@@ -190,7 +239,7 @@
    */
   function waitForGameUI() {
     let attempts = 0;
-    const maxAttempts = 60; // 30秒超时
+    const maxAttempts = 60;
 
     const check = setInterval(() => {
       attempts++;
@@ -212,27 +261,23 @@
   function startWatching() {
     // 方式1: 监听BGA的通知系统
     if (typeof dojo !== 'undefined' && dojo.subscribe) {
-      // 监听多种可能的地块放置通知
       const events = [
         'placeTile', 'tilePlaced', 'updateScore',
         'tileDrawn', 'newTurn', 'playerTurnStart',
         'onEnteringState', 'onLeavingState',
-        // BGA 卡卡颂常用的通知名
-        'playTile', 'tilePlacement', 'notif_tilePlaced',
-        'notif_newTurn',
+        'playTile', 'tilePlacement',
+        'notif_tilePlaced', 'notif_newTurn',
       ];
       for (const evt of events) {
         try {
           dojo.subscribe(evt, function () {
             setTimeout(sendGameData, 300);
           });
-        } catch (e) {
-          // 某些事件可能不存在，忽略
-        }
+        } catch (e) { /* 忽略 */ }
       }
     }
 
-    // 方式2: 使用MutationObserver监听更广范围的DOM变化
+    // 方式2: MutationObserver 监听更广范围的 DOM 变化
     const watchTargets = [
       document.getElementById('game_play_area'),
       document.getElementById('game_play_area_wrap'),
@@ -244,13 +289,7 @@
       const observer = new MutationObserver(function (mutations) {
         let shouldUpdate = false;
         for (const m of mutations) {
-          // 有新 DOM 节点添加
-          if (m.addedNodes.length > 0) {
-            shouldUpdate = true;
-            break;
-          }
-          // 属性变化（比如 class/style 变化可能表示地块放置）
-          if (m.type === 'attributes') {
+          if (m.addedNodes.length > 0 || m.type === 'attributes') {
             shouldUpdate = true;
             break;
           }
@@ -270,10 +309,10 @@
       }
     }
 
-    // 方式3: 定时轮询（兜底策略，缩短到 2 秒）
+    // 方式3: 定时轮询（兜底策略，2 秒）
     setInterval(sendGameData, 2000);
 
-    // 方式4: 拦截 BGA 的 AJAX 请求来检测游戏状态变化
+    // 方式4: 拦截 AJAX 请求
     interceptAjax();
   }
 
@@ -281,7 +320,6 @@
    * 拦截 AJAX 请求以检测游戏状态更新
    */
   function interceptAjax() {
-    // 拦截 XMLHttpRequest
     const origOpen = XMLHttpRequest.prototype.open;
     const origSend = XMLHttpRequest.prototype.send;
 
@@ -301,21 +339,22 @@
       return origSend.apply(this, arguments);
     };
 
-    // 拦截 fetch
     const origFetch = window.fetch;
-    window.fetch = function (input) {
-      const url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-      const result = origFetch.apply(this, arguments);
-      if (url.includes('carcassonne')) {
-        result.then(() => {
-          setTimeout(sendGameData, 500);
-        }).catch(() => { });
-      }
-      return result;
-    };
+    if (origFetch) {
+      window.fetch = function (input) {
+        const url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        const result = origFetch.apply(this, arguments);
+        if (url.includes('carcassonne')) {
+          result.then(() => {
+            setTimeout(sendGameData, 500);
+          }).catch(() => { });
+        }
+        return result;
+      };
+    }
   }
 
-  // 响应content script的数据请求
+  // 响应 content script 的数据请求
   window.addEventListener('message', function (event) {
     if (event.data && event.data.type === MSG_PREFIX + 'REQUEST_DATA') {
       sendGameData();
