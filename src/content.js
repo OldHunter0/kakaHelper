@@ -8,6 +8,12 @@
     const MSG_PREFIX = 'CARCA_HELPER_';
     let currentData = null;
     let panelElement = null;
+    /** 记住用户选择的过滤器 */
+    let currentFilter = 'all';
+    /** 缓存 sprite sheet URL（从 inject.js 获取） */
+    let cachedSpriteUrl = null;
+    let cachedFirstEdSpriteUrl = null;
+    let cachedIsFirstEdition = false;
 
     /* ────────── 地块逻辑 ────────── */
 
@@ -89,18 +95,10 @@
     function calculateRemaining(data) {
         const { tileData, tileTypes, playedTileIds, handTileIds } = data;
 
-        // 1. 按type分组统计总数（只统计当前游戏中使用的扩展包的地块）
+        // 1. 按type分组统计总数
         const typeTotal = {};  // type -> total count
         const typeTiles = {};  // type -> [tileId, ...]
         const typeInfo = {};   // type -> {image, image_firstedition, expansion}
-
-        // 需要排除河流地块 (expansion=9 对应河流)
-        // 河流地块不在牌堆中抽取，是游戏开始时自动铺设的
-        const usedExpansions = new Set();
-        for (const tileId in tileData) {
-            const td = tileData[tileId];
-            usedExpansions.add(td.expansion);
-        }
 
         for (const tileId in tileData) {
             const td = tileData[tileId];
@@ -144,9 +142,9 @@
 
     /**
      * 计算 background-position 百分比
-     * BGA sprite sheet 排列：first_edition 使用12列布局
+     * BGA sprite sheet 排列：12列布局
      */
-    function getSpritePosition(imageIndex, isFirstEdition) {
+    function getSpritePosition(imageIndex) {
         const cols = 12;
         const col = imageIndex % cols;
         const row = Math.floor(imageIndex / cols);
@@ -233,12 +231,19 @@
     function updatePanel(data) {
         createPanel();
 
+        // 更新缓存的 sprite 信息
+        if (data.spriteUrl) cachedSpriteUrl = data.spriteUrl;
+        if (data.firstEdSpriteUrl) cachedFirstEdSpriteUrl = data.firstEdSpriteUrl;
+        if (data.isFirstEdition !== undefined) cachedIsFirstEdition = data.isFirstEdition;
+
         const remaining = calculateRemaining(data);
         const tileTypes = data.tileTypes;
 
-        // 更新牌堆信息
+        // 更新牌堆信息（排除河流地块）
         const deckInfo = document.getElementById('carca-deck-info');
-        const totalRemaining = Object.values(remaining).reduce((s, r) => s + r.remaining, 0);
+        const totalRemaining = Object.values(remaining)
+            .filter(r => r.expansion !== 9) // 排除河流
+            .reduce((s, r) => s + r.remaining, 0);
         deckInfo.textContent = `剩余: ${totalRemaining}`;
 
         // 按扩展包分组
@@ -250,10 +255,12 @@
             9: '河流',
         };
 
-        // 收集当前游戏中使用的扩展包
+        // 收集当前游戏中使用的扩展包（排除河流 expansion=9）
         const expansionGroups = {};
         for (const type in remaining) {
             const exp = remaining[type].expansion;
+            // 河流地块是游戏开始时自动铺设的，不在牌堆中抽取，排除
+            if (exp === 9) continue;
             if (!expansionGroups[exp]) expansionGroups[exp] = [];
             expansionGroups[exp].push({ type: parseInt(type, 10), ...remaining[type] });
         }
@@ -263,9 +270,14 @@
         filterEl.innerHTML = '';
         const expKeys = Object.keys(expansionGroups).sort((a, b) => a - b);
 
+        // 验证当前 filter 是否依然有效
+        if (currentFilter !== 'all' && !expKeys.includes(String(currentFilter))) {
+            currentFilter = 'all';
+        }
+
         if (expKeys.length > 1) {
             const allBtn = document.createElement('button');
-            allBtn.className = 'carca-filter-btn active';
+            allBtn.className = 'carca-filter-btn' + (currentFilter === 'all' ? ' active' : '');
             allBtn.textContent = '全部';
             allBtn.dataset.exp = 'all';
             allBtn.addEventListener('click', () => filterByExpansion('all'));
@@ -273,12 +285,15 @@
 
             for (const exp of expKeys) {
                 const btn = document.createElement('button');
-                btn.className = 'carca-filter-btn';
+                btn.className = 'carca-filter-btn' + (String(currentFilter) === String(exp) ? ' active' : '');
                 btn.textContent = expansionNames[exp] || `扩展${exp}`;
                 btn.dataset.exp = exp;
                 btn.addEventListener('click', () => filterByExpansion(exp));
                 filterEl.appendChild(btn);
             }
+        } else if (expKeys.length === 1) {
+            // 只有一个扩展包时，不显示过滤器，重置 filter
+            currentFilter = 'all';
         }
 
         // 构建地块网格
@@ -310,22 +325,36 @@
                 card.className = 'carca-tile-card' + (item.remaining === 0 ? ' depleted' : '');
                 card.title = tileType ? getTileDescription(tileType) : `类型 ${item.type}`;
 
-                // 地块缩略图 - 从BGA的sprite sheet中截取
+                // 地块缩略图
                 const thumb = document.createElement('div');
                 thumb.className = 'carca-tile-thumb';
 
-                // 检测页面中是否使用 first_edition
-                const isFirstEdition = !!document.querySelector('.tile_art.first_edition');
+                const isFirstEdition = cachedIsFirstEdition;
                 const imgIndex = isFirstEdition ? item.image_firstedition : item.image;
 
                 if (imgIndex !== undefined) {
-                    // 复用BGA的tile_art样式
                     const tileArt = document.createElement('div');
-                    tileArt.className = 'tile_art' + (isFirstEdition ? ' first_edition' : '');
-                    tileArt.style.backgroundPosition = getSpritePosition(imgIndex, isFirstEdition);
+                    tileArt.className = 'carca-tile-thumb-art';
+
+                    // 使用从 inject.js 获取的 sprite URL（不依赖 BGA CSS 类）
+                    const spriteUrlToUse = isFirstEdition
+                        ? (cachedFirstEdSpriteUrl || cachedSpriteUrl)
+                        : cachedSpriteUrl;
+
+                    if (spriteUrlToUse) {
+                        tileArt.style.backgroundImage = spriteUrlToUse;
+                    } else {
+                        // 回退：尝试使用 BGA 的 CSS 类
+                        tileArt.className += ' tile_art' + (isFirstEdition ? ' first_edition' : '');
+                    }
+
+                    tileArt.style.backgroundPosition = getSpritePosition(imgIndex);
+                    tileArt.style.backgroundSize = '1200% auto';
                     tileArt.style.width = '100%';
                     tileArt.style.height = '100%';
-                    tileArt.style.transform = 'none';
+                    tileArt.style.position = 'absolute';
+                    tileArt.style.top = '0';
+                    tileArt.style.left = '0';
                     thumb.appendChild(tileArt);
                 }
 
@@ -352,9 +381,17 @@
             section.appendChild(tilesRow);
             gridEl.appendChild(section);
         }
+
+        // 恢复过滤器选择
+        if (currentFilter !== 'all') {
+            filterByExpansion(currentFilter);
+        }
     }
 
     function filterByExpansion(exp) {
+        // 保存用户选择
+        currentFilter = exp;
+
         // 更新按钮状态
         document.querySelectorAll('.carca-filter-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.exp === String(exp));
@@ -384,9 +421,9 @@
         window.postMessage({ type: MSG_PREFIX + 'REQUEST_DATA' }, '*');
     }, 1000);
 
-    // 定时请求刷新（兜底）
+    // 定时请求刷新（兜底，缩短到 3 秒）
     setInterval(function () {
         window.postMessage({ type: MSG_PREFIX + 'REQUEST_DATA' }, '*');
-    }, 8000);
+    }, 3000);
 
 })();
