@@ -319,6 +319,7 @@
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -329,14 +330,120 @@
   animation: carca-fade-in 0.3s ease-out;
 }
 
+/* ── 悬浮提示框 ── */
+#carca-hover-tooltip {
+  position: fixed;
+  z-index: 999999;
+  min-width: 180px;
+  max-width: 360px;
+  background: linear-gradient(135deg, rgba(15, 17, 30, 0.96), rgba(25, 28, 45, 0.96));
+  border: 1px solid rgba(100, 130, 220, 0.35);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 12px;
+  color: #e0e4f0;
+  padding: 8px 10px;
+  animation: carca-tooltip-fade-in 0.15s ease-out;
+  pointer-events: none;
+}
+
+@keyframes carca-tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.carca-hover-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b0b8d8;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(120, 140, 200, 0.15);
+  margin-bottom: 6px;
+}
+
+.carca-hover-header strong {
+  color: #8ec5fc;
+  font-size: 14px;
+}
+
+.carca-hover-empty {
+  font-size: 11px;
+  color: #7880a0;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.carca-hover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 140, 200, 0.3) transparent;
+}
+
+.carca-hover-grid::-webkit-scrollbar {
+  width: 4px;
+}
+
+.carca-hover-grid::-webkit-scrollbar-thumb {
+  background: rgba(120, 140, 200, 0.3);
+  border-radius: 2px;
+}
+
+.carca-hover-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 44px;
+  padding: 3px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(120, 140, 200, 0.1);
+  transition: background 0.15s ease;
+}
+
+.carca-hover-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 3px;
+  background-color: rgba(0, 0, 0, 0.25);
+  background-repeat: no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.carca-hover-count {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #8ec5fc;
+  line-height: 1;
+}
+
 /* ── 响应式 ── */
 @media (max-width: 1200px) {
   #carca-helper-panel {
     width: 280px;
   }
+
   .carca-tile-card {
     width: 52px;
   }
+
   .carca-tile-thumb {
     width: 42px;
     height: 42px;

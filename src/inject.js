@@ -206,12 +206,14 @@
     const knownPositions = extractKnownSpritePositions();
 
     return {
-      tileData: filteredTileData,
-      tileTypes: gd.tile_types,
-      playedTileIds: allPlayedIds,
-      handTileIds: handTileIds,
+      tileData: gd.tile_data,         // 所有地块ID -> {type, image, image_firstedition, expansion}
+      tileTypes: gd.tile_types,       // 地块类型结构定义
+      playedTileIds: allPlayedIds,    // 已放置的地块ID（合并 gamedatas + DOM）
+      handTileIds: handTileIds,       // 手牌地块ID
       deckSize: parseInt(gd.deck_size, 10) || 0,
       expansions: expansions,
+      places: gd.places,              // 可放置位置
+      tilesDetail: gd.tiles,          // 已放置地块详情 {id, x, y, type, ori, ...}
       tileArtInfo: tileArtInfo,
       isFirstEdition: isFirstEdition,
       spriteCols: spriteCols,
@@ -314,6 +316,9 @@
 
     // 方式4: 拦截 AJAX 请求
     interceptAjax();
+
+    // 方式5: 设置棋盘空位悬浮监听
+    setupBoardHoverListeners();
   }
 
   /**
@@ -352,6 +357,104 @@
         return result;
       };
     }
+  }
+
+  /**
+   * 设置棋盘空位悬浮监听
+   * BGA 卡卡颂的空位 DOM: 监听 #board 区域的鼠标移动，
+   * 检查是否悬浮在空位上，通过 postMessage 通知 content.js
+   */
+  function setupBoardHoverListeners() {
+    let lastHoverKey = null;
+    let hoverListenerActive = false;
+
+    function startHoverWatch() {
+      if (hoverListenerActive) return;
+      hoverListenerActive = true;
+
+      // 使用事件委托监听整个 board 区域
+      const boardEl = document.getElementById('board') || document.getElementById('game_play_area');
+      if (!boardEl) return;
+
+      boardEl.addEventListener('mouseover', function (e) {
+        // 查找空位元素：BGA 空位通常是 class 含 "place" 或 id 含 "place" 的元素
+        const placeEl = e.target.closest('[id^="place_"], .place, [id^="tile_place"]');
+        if (!placeEl) {
+          // 也尝试匹配含坐标信息的空位元素
+          const coordEl = e.target.closest('[data-x][data-y]');
+          if (coordEl && !coordEl.querySelector('.tile_art')) {
+            handlePlaceHover(coordEl, e);
+            return;
+          }
+          return;
+        }
+        handlePlaceHover(placeEl, e);
+      });
+
+      boardEl.addEventListener('mouseout', function (e) {
+        const placeEl = e.target.closest('[id^="place_"], .place, [id^="tile_place"], [data-x][data-y]');
+        if (placeEl || !e.relatedTarget || !boardEl.contains(e.relatedTarget)) {
+          if (lastHoverKey) {
+            lastHoverKey = null;
+            window.postMessage({
+              type: MSG_PREFIX + 'LEAVE_PLACE',
+            }, '*');
+          }
+        }
+      });
+    }
+
+    function handlePlaceHover(el, e) {
+      // 尝试从元素属性获取坐标
+      let x, y;
+
+      // 方法1：从 data 属性
+      if (el.dataset && el.dataset.x !== undefined) {
+        x = parseInt(el.dataset.x, 10);
+        y = parseInt(el.dataset.y, 10);
+      }
+      // 方法2：从 id 解析 (如 "place_1_0" 或 "tile_place_1_-1")
+      if (x === undefined && el.id) {
+        const match = el.id.match(/place_?(-?\d+)_(-?\d+)/);
+        if (match) {
+          x = parseInt(match[1], 10);
+          y = parseInt(match[2], 10);
+        }
+      }
+      // 方法3：从 style 中的 left/top 和 board 尺寸反推坐标
+      if (x === undefined) {
+        // 使用 places 数据和元素位置来匹配
+        const gd = (typeof gameui !== 'undefined' && gameui && gameui.gamedatas) ? gameui.gamedatas : null;
+        if (gd && gd.places) {
+          // 获取元素在 board 中的相对位置并匹配最近的 place
+          const rect = el.getBoundingClientRect();
+          const boardRect = (document.getElementById('board') || el.parentElement).getBoundingClientRect();
+          // 无法精确反推，跳过
+        }
+      }
+
+      if (x !== undefined && y !== undefined) {
+        const key = x + ',' + y;
+        if (key !== lastHoverKey) {
+          lastHoverKey = key;
+          window.postMessage({
+            type: MSG_PREFIX + 'HOVER_PLACE',
+            payload: {
+              x: x,
+              y: y,
+              mouseX: e.clientX,
+              mouseY: e.clientY,
+            },
+          }, '*');
+        }
+      }
+    }
+
+    startHoverWatch();
+
+    // 也尝试定时重新绑定（棋盘可能延迟加载）
+    setTimeout(startHoverWatch, 3000);
+    setTimeout(startHoverWatch, 8000);
   }
 
   // 响应 content script 的数据请求

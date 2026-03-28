@@ -544,12 +544,273 @@
         });
     }
 
+    /* ────────── 悬浮预览逻辑 ────────── */
+
+    let hoverTooltipEl = null;
+
+    /**
+     * 根据旋转获取边类型
+     * ori: 1=0°, 2=90°顺时针, 3=180°, 4=270°
+     * 旋转后，原来的边 e 变成：
+     *   ori=1: 不变
+     *   ori=2: 北→东, 东→南, 南→西, 西→北 (顺时针90°)
+     *   ori=3: 北→南, 东→西, ...
+     *   ori=4: 北→西, 西→南, ...
+     */
+    function getRotatedEdge(edge, ori) {
+        // edge: 1=北,2=东,3=南,4=西
+        // ori=1 不旋转, ori=2 顺时针90°, ori=3 180°, ori=4 逆时针90°
+        if (ori === 1) return edge;
+        // 顺时针旋转: 原来在边e的特征，旋转后出现在边 ((e - 1 + (ori - 1)) % 4) + 1
+        return ((edge - 1 + (ori - 1)) % 4) + 1;
+    }
+
+    /**
+     * 获取地块类型在指定旋转下某条边的特征类型
+     * 我们需要知道：旋转后，北边(1)是什么类型？
+     * 旋转后的北边 = 原始的哪条边旋转过来的？
+     * ori=2 (顺时针90°): 旋转后的北 = 原始的西(4)
+     * 公式: 原始边 = ((targetEdge - 1 - (ori - 1) + 4) % 4) + 1
+     */
+    function getEdgeTypeRotated(tileType, targetEdge, ori) {
+        const origEdge = ((targetEdge - 1 - (ori - 1) + 4) % 4) + 1;
+        return getEdgeType(tileType, origEdge);
+    }
+
+    /**
+     * 查找可以放置在 (x, y) 的所有剩余地块类型
+     * @returns {Array} [{type, remaining, image, image_firstedition, expansion, rotations: [ori, ...]}, ...]
+     */
+    function findMatchingTiles(x, y, data) {
+        if (!data || !data.tilesDetail || !data.tileTypes || !data.tileData) return [];
+
+        const { tilesDetail, tileTypes, tileData, playedTileIds, handTileIds } = data;
+
+        // 构建已放置地块的位置索引: key="x,y" -> {type, ori}
+        const placedMap = {};
+        for (const tileId in tilesDetail) {
+            const t = tilesDetail[tileId];
+            const key = parseInt(t.x, 10) + ',' + parseInt(t.y, 10);
+            placedMap[key] = { type: parseInt(t.type, 10), ori: parseInt(t.ori, 10) };
+        }
+
+        // 获取四个邻居的约束条件
+        // 邻居在方向d的边 = 我们位置对面的边
+        // 北邻居(x, y-1)的南边(3) 必须匹配我们的北边(1)
+        const neighbors = [
+            { dx: 0, dy: -1, myEdge: 1, neighborEdge: 3 }, // 北
+            { dx: 1, dy: 0, myEdge: 2, neighborEdge: 4 }, // 东
+            { dx: 0, dy: 1, myEdge: 3, neighborEdge: 1 }, // 南
+            { dx: -1, dy: 0, myEdge: 4, neighborEdge: 2 }, // 西
+        ];
+
+        const constraints = []; // [{myEdge, requiredType}]
+        for (const n of neighbors) {
+            const nKey = (x + n.dx) + ',' + (y + n.dy);
+            const placed = placedMap[nKey];
+            if (placed) {
+                const nTileType = tileTypes[placed.type];
+                if (nTileType) {
+                    const requiredType = getEdgeTypeRotated(nTileType, n.neighborEdge, placed.ori);
+                    constraints.push({ myEdge: n.myEdge, requiredType });
+                }
+            }
+        }
+
+        if (constraints.length === 0) return []; // 没有相邻地块，不显示
+
+        // 统计剩余地块
+        const usedIds = new Set([...playedTileIds, ...handTileIds]);
+        const typeRemaining = {}; // type -> {remaining, image, image_firstedition, expansion}
+        const typeFirst = {}; // type -> first tileData entry
+        for (const tileId in tileData) {
+            const td = tileData[tileId];
+            const type = td.type;
+            if (td.expansion === 9) continue; // 排除河流
+            if (!typeRemaining[type]) {
+                typeRemaining[type] = { remaining: 0, total: 0 };
+                typeFirst[type] = td;
+            }
+            typeRemaining[type].total++;
+            if (!usedIds.has(parseInt(tileId, 10))) {
+                typeRemaining[type].remaining++;
+            }
+        }
+
+        // 对每个剩余 > 0 的类型，检查是否有至少一个旋转可以满足约束
+        const matches = [];
+        for (const typeStr in typeRemaining) {
+            const type = parseInt(typeStr, 10);
+            const info = typeRemaining[type];
+            if (info.remaining <= 0) continue;
+
+            const tileType = tileTypes[type];
+            if (!tileType) continue;
+
+            const validRotations = [];
+            for (let ori = 1; ori <= 4; ori++) {
+                let allMatch = true;
+                for (const c of constraints) {
+                    const edgeType = getEdgeTypeRotated(tileType, c.myEdge, ori);
+                    if (edgeType !== c.requiredType) {
+                        allMatch = false;
+                        break;
+                    }
+                }
+                if (allMatch) validRotations.push(ori);
+            }
+
+            if (validRotations.length > 0) {
+                const td = typeFirst[type];
+                matches.push({
+                    type,
+                    remaining: info.remaining,
+                    total: info.total,
+                    image: td.image,
+                    image_firstedition: td.image_firstedition,
+                    expansion: td.expansion,
+                    rotations: validRotations,
+                });
+            }
+        }
+
+        // 按剩余数量降序排序
+        matches.sort((a, b) => b.remaining - a.remaining);
+        return matches;
+    }
+
+    /**
+     * 显示悬浮提示框
+     */
+    function showHoverTooltip(matches, mouseX, mouseY, x, y) {
+        hideHoverTooltip();
+
+        if (!matches || matches.length === 0) {
+            // 显示无匹配提示
+            hoverTooltipEl = document.createElement('div');
+            hoverTooltipEl.id = 'carca-hover-tooltip';
+            hoverTooltipEl.innerHTML = `
+                <div class="carca-hover-header">📍 位置 (${x}, ${y})</div>
+                <div class="carca-hover-empty">无可放置的地块</div>
+            `;
+            positionTooltip(hoverTooltipEl, mouseX, mouseY);
+            document.body.appendChild(hoverTooltipEl);
+            return;
+        }
+
+        const totalMatchCount = matches.reduce((s, m) => s + m.remaining, 0);
+
+        hoverTooltipEl = document.createElement('div');
+        hoverTooltipEl.id = 'carca-hover-tooltip';
+
+        let html = `<div class="carca-hover-header">📍 (${x}, ${y}) — 可放 <strong>${totalMatchCount}</strong> 张 / <strong>${matches.length}</strong> 种</div>`;
+        html += '<div class="carca-hover-grid">';
+
+        for (const m of matches) {
+            const tileType = currentData && currentData.tileTypes ? currentData.tileTypes[m.type] : null;
+            const desc = tileType ? getTileDescription(tileType) : `类型 ${m.type}`;
+
+            html += `<div class="carca-hover-item" title="${desc}">`;
+            html += `<div class="carca-hover-thumb" data-type="${m.type}" data-img="${m.image}" data-img-fe="${m.image_firstedition || ''}"></div>`;
+            html += `<span class="carca-hover-count">${m.remaining}</span>`;
+            html += '</div>';
+        }
+
+        html += '</div>';
+        hoverTooltipEl.innerHTML = html;
+
+        positionTooltip(hoverTooltipEl, mouseX, mouseY);
+        document.body.appendChild(hoverTooltipEl);
+
+        // 渲染缩略图 sprite
+        renderTooltipSprites();
+    }
+
+    /**
+     * 渲染提示框中的缩略图
+     */
+    function renderTooltipSprites() {
+        if (!hoverTooltipEl || !currentData) return;
+        const thumbs = hoverTooltipEl.querySelectorAll('.carca-hover-thumb');
+        thumbs.forEach(thumb => {
+            const imgIndex = cachedIsFirstEdition
+                ? parseInt(thumb.dataset.imgFe, 10)
+                : parseInt(thumb.dataset.img, 10);
+
+            if (isNaN(imgIndex)) return;
+
+            const bgImage = cachedIsFirstEdition
+                ? (cachedFirstEdSpriteUrl || cachedSpriteUrl)
+                : cachedSpriteUrl;
+
+            if (bgImage) {
+                thumb.style.backgroundImage = bgImage;
+                const totalRows = currentData.spriteRows || 4;
+                thumb.style.backgroundPosition = getSpritePosition(imgIndex, totalRows);
+                thumb.style.backgroundSize = `${(currentData.spriteCols || 12) * 100}% auto`;
+            }
+        });
+    }
+
+    /**
+     * 定位提示框
+     */
+    function positionTooltip(el, mouseX, mouseY) {
+        el.style.position = 'fixed';
+        el.style.zIndex = '999999';
+        // 先放到页面上以获取尺寸
+        el.style.visibility = 'hidden';
+        document.body.appendChild(el);
+
+        const rect = el.getBoundingClientRect();
+        const viewW = window.innerWidth;
+        const viewH = window.innerHeight;
+
+        let left = mouseX + 15;
+        let top = mouseY + 15;
+
+        // 避免超出视口
+        if (left + rect.width > viewW - 10) left = mouseX - rect.width - 15;
+        if (top + rect.height > viewH - 10) top = mouseY - rect.height - 15;
+        if (left < 10) left = 10;
+        if (top < 10) top = 10;
+
+        el.style.left = left + 'px';
+        el.style.top = top + 'px';
+        el.style.visibility = 'visible';
+
+        // 从body移除（会在调用者重新添加）
+        document.body.removeChild(el);
+    }
+
+    /**
+     * 隐藏悬浮提示框
+     */
+    function hideHoverTooltip() {
+        if (hoverTooltipEl && hoverTooltipEl.parentNode) {
+            hoverTooltipEl.parentNode.removeChild(hoverTooltipEl);
+        }
+        hoverTooltipEl = null;
+    }
+
     /* ────────── 消息监听 ────────── */
 
     window.addEventListener('message', function (event) {
         if (event.data && event.data.type === MSG_PREFIX + 'GAME_DATA') {
             currentData = event.data.payload;
             updatePanel(currentData);
+        }
+        // 悬浮空位
+        if (event.data && event.data.type === MSG_PREFIX + 'HOVER_PLACE') {
+            const p = event.data.payload;
+            if (currentData) {
+                const matches = findMatchingTiles(p.x, p.y, currentData);
+                showHoverTooltip(matches, p.mouseX, p.mouseY, p.x, p.y);
+            }
+        }
+        // 离开空位
+        if (event.data && event.data.type === MSG_PREFIX + 'LEAVE_PLACE') {
+            hideHoverTooltip();
         }
     });
 
